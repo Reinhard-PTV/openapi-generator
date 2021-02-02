@@ -4,7 +4,7 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>openapi-generator-project</artifactId>
-    <groupId>com.ptvgroup.openapi</groupId>
+    <groupId>com.github.ptv-logistics</groupId>
     <!-- RELEASE_VERSION -->
     <version>5.0.1</version>
     <!-- /RELEASE_VERSION -->
