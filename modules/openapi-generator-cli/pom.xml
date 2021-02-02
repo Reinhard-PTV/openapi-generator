@@ -1,7 +1,7 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <parent>
-        <groupId>org.openapitools</groupId>
+        <groupId>com.ptvgroup.openapi</groupId>
         <artifactId>openapi-generator-project</artifactId>
         <!-- RELEASE_VERSION -->
         <version>5.0.1-SNAPSHOT</version>
@@ -118,7 +118,7 @@
     <dependencies>
 
         <dependency>
-            <groupId>org.openapitools</groupId>
+            <groupId>com.ptvgroup.openapi</groupId>
             <artifactId>openapi-generator</artifactId>
             <version>${project.version}</version>
             <exclusions>

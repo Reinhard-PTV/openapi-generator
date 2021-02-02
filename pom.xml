@@ -5,7 +5,7 @@
         <version>5</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
-    <groupId>org.openapitools</groupId>
+    <groupId>com.ptvgroup.openapi</groupId>
     <artifactId>openapi-generator-project</artifactId>
     <packaging>pom</packaging>
     <name>openapi-generator-project</name>
