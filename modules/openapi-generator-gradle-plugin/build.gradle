@@ -22,7 +22,7 @@ buildscript {
     }
 }
 
-group 'org.openapitools'
+group 'com.github.ptv-logistics'
 // Shared OpenAPI Generator version be passed via command line arg as -PopenApiGeneratorVersion=VERSION
 version "$openApiGeneratorVersion"
 description = """
@@ -59,7 +59,7 @@ repositories {
 dependencies {
     compile gradleApi()
     // Shared OpenAPI Generator version be passed via command line arg as -PopenApiGeneratorVersion=VERSION
-    compile "org.openapitools:openapi-generator:$openApiGeneratorVersion"
+    compile "com.github.ptv-logistics:openapi-generator:$openApiGeneratorVersion"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     testCompile 'org.testng:testng:6.9.6',
