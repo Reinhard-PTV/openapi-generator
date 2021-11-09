@@ -5,7 +5,7 @@
         <groupId>com.github.ptv-logistics</groupId>
         <artifactId>openapi-generator-project</artifactId>
         <!-- RELEASE_VERSION -->
-        <version>5.0.2</version>
+        <version>5.0.3-SNAPSHOT</version>
         <!-- /RELEASE_VERSION -->
         <relativePath>../..</relativePath>
     </parent>
