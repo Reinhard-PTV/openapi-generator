@@ -19,6 +19,7 @@ package org.openapitools.codegen.csharpnetcore;
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.parser.core.models.ParseOptions;
+import org.apache.commons.lang.StringUtils;
 import org.openapitools.codegen.ClientOptInput;
 import org.openapitools.codegen.CodegenConstants;
 import org.openapitools.codegen.DefaultGenerator;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+import static org.junit.Assert.assertEquals;
 import static org.openapitools.codegen.TestUtils.assertFileContains;
 
 public class CSharpNetCoreClientDeepObjectTest {
@@ -58,9 +60,14 @@ public class CSharpNetCoreClientDeepObjectTest {
         generator.setGeneratorPropertyDefault(CodegenConstants.APIS, "true");
         generator.setGeneratorPropertyDefault(CodegenConstants.SUPPORTING_FILES, "false");
         generator.opts(input).generate();
+        
         assertFileContains(Paths.get(outputPath + "/src/Org.OpenAPITools/Api/DefaultApi.cs"),
                 "options[id]", "options[name]", "options[category]", "options[tags]",
                 "options[status]", "options[photoUrls]",
                 "inputOptions[a]", "inputOptions[b]", "inputOptions[c]");
+
+        String content = new String(Files.readAllBytes(Paths.get(outputPath + "/src/Org.OpenAPITools/Api/DefaultApi.cs")));
+        int count = StringUtils.countMatches(content,"inputOptions[a]");
+        assertEquals(2, count);
     }
 }
