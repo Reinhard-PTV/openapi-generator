@@ -68,7 +68,7 @@ public class CSharpNetCoreClientDeepObjectTest {
                 "inputOptions[a]", "inputOptions[b]", "inputOptions[c]");
 
         String content = new String(Files.readAllBytes(Paths.get(outputPath + "/src/Org.OpenAPITools/Api/DefaultApi.cs")), StandardCharsets.UTF_8);
-        int count = StringUtils.countMatches(content,"inputOptions[a]");
-        assertEquals(2, count);
+        int counter = StringUtils.countMatches(content,"inputOptions[a]");
+        assertEquals(2, counter);
     }
 }
