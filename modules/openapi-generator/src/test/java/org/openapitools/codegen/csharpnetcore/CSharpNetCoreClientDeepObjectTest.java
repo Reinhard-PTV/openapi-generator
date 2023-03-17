@@ -28,6 +28,7 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
@@ -66,7 +67,7 @@ public class CSharpNetCoreClientDeepObjectTest {
                 "options[status]", "options[photoUrls]",
                 "inputOptions[a]", "inputOptions[b]", "inputOptions[c]");
 
-        String content = new String(Files.readAllBytes(Paths.get(outputPath + "/src/Org.OpenAPITools/Api/DefaultApi.cs")));
+        String content = new String(Files.readAllBytes(Paths.get(outputPath + "/src/Org.OpenAPITools/Api/DefaultApi.cs")), StandardCharsets.UTF_8);
         int count = StringUtils.countMatches(content,"inputOptions[a]");
         assertEquals(2, count);
     }
