@@ -14,7 +14,6 @@ using System;
 using System.Linq;
 using System.IO;
 using System.Collections.Generic;
-using Org.OpenAPITools.Api;
 using Org.OpenAPITools.Model;
 using Org.OpenAPITools.Client;
 using System.Reflection;
@@ -64,14 +63,6 @@ namespace Org.OpenAPITools.Test.Model
             // TODO unit test for the property 'MainShape'
         }
         /// <summary>
-        /// Test the property 'ShapeOrNull'
-        /// </summary>
-        [Fact]
-        public void ShapeOrNullTest()
-        {
-            // TODO unit test for the property 'ShapeOrNull'
-        }
-        /// <summary>
         /// Test the property 'Shapes'
         /// </summary>
         [Fact]
@@ -86,6 +77,14 @@ namespace Org.OpenAPITools.Test.Model
         public void NullableShapeTest()
         {
             // TODO unit test for the property 'NullableShape'
+        }
+        /// <summary>
+        /// Test the property 'ShapeOrNull'
+        /// </summary>
+        [Fact]
+        public void ShapeOrNullTest()
+        {
+            // TODO unit test for the property 'ShapeOrNull'
         }
 
     }

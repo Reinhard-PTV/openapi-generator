@@ -42,7 +42,6 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.servers.ServerVariable;
 import io.swagger.v3.parser.util.SchemaTypeUtil;
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.text.StringEscapeUtils;
@@ -76,24 +75,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import io.swagger.v3.core.util.Json;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.Operation;
-import io.swagger.v3.oas.models.PathItem;
-import io.swagger.v3.oas.models.callbacks.Callback;
-import io.swagger.v3.oas.models.examples.Example;
-import io.swagger.v3.oas.models.headers.Header;
-import io.swagger.v3.oas.models.media.*;
-import io.swagger.v3.oas.models.parameters.*;
-import io.swagger.v3.oas.models.responses.ApiResponse;
-import io.swagger.v3.oas.models.responses.ApiResponses;
-import io.swagger.v3.oas.models.security.OAuthFlow;
-import io.swagger.v3.oas.models.security.OAuthFlows;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import io.swagger.v3.oas.models.servers.Server;
-import io.swagger.v3.oas.models.servers.ServerVariable;
-import io.swagger.v3.parser.util.SchemaTypeUtil;
 
 import static org.openapitools.codegen.CodegenConstants.UNSUPPORTED_V310_SPEC_MSG;
 import static org.openapitools.codegen.utils.OnceLogger.once;
@@ -147,8 +128,8 @@ public class DefaultCodegen implements CodegenConfig {
                 .includeSecurityFeatures(
                         SecurityFeature.BasicAuth, SecurityFeature.ApiKey, SecurityFeature.BearerToken,
                         SecurityFeature.OAuth2_Implicit, SecurityFeature.OAuth2_Password,
-                        SecurityFeature.OAuth2_ClientCredentials, SecurityFeature.OAuth2_AuthorizationCode
-                        // OpenIDConnect not yet supported
+                        SecurityFeature.OAuth2_ClientCredentials, SecurityFeature.OAuth2_AuthorizationCode,
+                        SecurityFeature.OpenIDConnect
                 )
                 .includeWireFormatFeatures(
                         WireFormatFeature.JSON, WireFormatFeature.XML
@@ -611,6 +592,7 @@ public class DefaultCodegen implements CodegenConfig {
 
     /**
      * Loop through all models to update different flags (e.g. isSelfReference), children models, etc
+     * and update mapped models for import.
      *
      * @param objs Map of models
      * @return maps of models with various updates
@@ -661,10 +643,15 @@ public class DefaultCodegen implements CodegenConfig {
         }
 
         // loop through properties of each model to detect self-reference
+        // and update mapped models for import
         for (ModelsMap entry : objs.values()) {
             for (ModelMap mo : entry.getModels()) {
                 CodegenModel cm = mo.getModel();
                 removeSelfReferenceImports(cm);
+
+                if (!this.getLegacyDiscriminatorBehavior()) {
+                    cm.addDiscriminatorMappedModelsImports(true);
+                }
             }
         }
         setCircularReferences(allModels);
@@ -2037,6 +2024,18 @@ public class DefaultCodegen implements CodegenConfig {
     }
 
     /**
+     * Return the examples of the parameter.
+     *
+     * @param codegenParameter Codegen parameter
+     * @param parameter        Parameter
+     */
+    public void setParameterExamples(CodegenParameter codegenParameter, Parameter parameter) {
+        if (parameter.getExamples() != null && !parameter.getExamples().isEmpty()) {
+            codegenParameter.examples = parameter.getExamples();
+        }
+    }
+
+    /**
      * Return the example value of the parameter.
      *
      * @param codegenParameter Codegen parameter
@@ -2655,9 +2654,6 @@ public class DefaultCodegen implements CodegenConfig {
                     if (m.discriminator == null && innerSchema.getDiscriminator() != null) {
                         LOGGER.debug("discriminator is set to null (not correctly set earlier): {}", m.name);
                         m.setDiscriminator(createDiscriminator(m.name, innerSchema, this.openAPI));
-                        if (!this.getLegacyDiscriminatorBehavior()) {
-                            m.addDiscriminatorMappedModelsImports();
-                        }
                         modelDiscriminators++;
                     }
 
@@ -2740,7 +2736,9 @@ public class DefaultCodegen implements CodegenConfig {
                         addProperties(allProperties, allRequired, refSchema, new HashSet<>());
                     } else {
                         // composition
-                        addProperties(properties, required, refSchema, new HashSet<>());
+                        Map<String, Schema> newProperties = new LinkedHashMap<>();
+                        addProperties(newProperties, required, refSchema, new HashSet<>());
+                        mergeProperties(properties, newProperties);
                         addProperties(allProperties, allRequired, refSchema, new HashSet<>());
                     }
                 }
@@ -2812,7 +2810,30 @@ public class DefaultCodegen implements CodegenConfig {
         if (Boolean.TRUE.equals(schema.getNullable())) {
             m.isNullable = Boolean.TRUE;
         }
+
         // end of code block for composed schema
+    }
+
+    /**
+     * Combines all previously-detected type entries for a schema with newly-discovered ones, to ensure
+     * that schema for items like enum include all possible values.
+     */
+    private void mergeProperties(Map<String, Schema> existingProperties, Map<String, Schema> newProperties) {
+        // https://github.com/OpenAPITools/openapi-generator/issues/12545
+        if (null != existingProperties && null != newProperties) {
+            Schema existingType = existingProperties.get("type");
+            Schema newType = newProperties.get("type");
+            existingProperties.putAll(newProperties);
+            if (null != existingType && null != newType && !newType.getEnum().isEmpty()) {
+                for (Object e : newType.getEnum()) {
+                    // ensure all interface enum types are added to schema
+                    if (null != existingType.getEnum() && !existingType.getEnum().contains(e)) {
+                        existingType.addEnumItemObject(e);
+                    }
+                }
+                existingProperties.put("type", existingType);
+            }
+        }
     }
 
     protected void updateModelForObject(CodegenModel m, Schema schema) {
@@ -2999,9 +3020,6 @@ public class DefaultCodegen implements CodegenConfig {
         m.isAlias = (typeAliases.containsKey(name)
                 || isAliasOfSimpleTypes(schema)); // check if the unaliased schema is an alias of simple OAS types
         m.setDiscriminator(createDiscriminator(name, schema, this.openAPI));
-        if (!this.getLegacyDiscriminatorBehavior()) {
-            m.addDiscriminatorMappedModelsImports();
-        }
 
         if (schema.getDeprecated() != null) {
             m.isDeprecated = schema.getDeprecated();
@@ -3455,15 +3473,15 @@ public class DefaultCodegen implements CodegenConfig {
                 break;
             }
             currentSchemaName = queue.remove(0);
-            MappedModel mm = new MappedModel(currentSchemaName, toModelName(currentSchemaName));
-            descendentSchemas.add(mm);
             Schema cs = schemas.get(currentSchemaName);
             Map<String, Object> vendorExtensions = cs.getExtensions();
-            if (vendorExtensions != null && !vendorExtensions.isEmpty() && vendorExtensions.containsKey("x-discriminator-value")) {
-                String xDiscriminatorValue = (String) vendorExtensions.get("x-discriminator-value");
-                mm = new MappedModel(xDiscriminatorValue, toModelName(currentSchemaName));
-                descendentSchemas.add(mm);
-            }
+            String mappingName =
+                Optional.ofNullable(vendorExtensions)
+                    .map(ve -> ve.get("x-discriminator-value"))
+                    .map(discriminatorValue -> (String) discriminatorValue)
+                    .orElse(currentSchemaName);
+            MappedModel mm = new MappedModel(mappingName, toModelName(currentSchemaName));
+            descendentSchemas.add(mm);
         }
         return descendentSchemas;
     }
@@ -3513,10 +3531,11 @@ public class DefaultCodegen implements CodegenConfig {
             // for schemas that allOf inherit from this schema, add those descendants to this discriminator map
             List<MappedModel> otherDescendants = getAllOfDescendants(schemaName, openAPI);
             for (MappedModel otherDescendant : otherDescendants) {
-                // add only if the mapping names are not the same
+                // add only if the mapping names are not the same and the model names are not the same
                 boolean matched = false;
                 for (MappedModel uniqueDescendant : uniqueDescendants) {
-                    if (uniqueDescendant.getMappingName().equals(otherDescendant.getMappingName())) {
+                    if (uniqueDescendant.getMappingName().equals(otherDescendant.getMappingName())
+                        || (uniqueDescendant.getModelName().equals(otherDescendant.getModelName()))) {
                         matched = true;
                         break;
                     }
@@ -3621,6 +3640,10 @@ public class DefaultCodegen implements CodegenConfig {
     }
 
     protected void updatePropertyForMap(CodegenProperty property, Schema p) {
+        // throw exception if additionalProperties is false
+        if (p.getAdditionalProperties() instanceof Boolean && Boolean.FALSE.equals(p.getAdditionalProperties())) {
+            throw new RuntimeException("additionalProperties cannot be false in updatePropertyForMap.");
+        }
         property.isContainer = true;
         property.containerType = "map";
         // TODO remove this hack in the future, code should use minProperties and maxProperties for object schemas
@@ -3790,15 +3813,14 @@ public class DefaultCodegen implements CodegenConfig {
         }
 
         Schema original = null;
-        // check if it's allOf (only 1 sub schema) with default/nullable/etc set in the top level
-        if (ModelUtils.isAllOf(p) && p.getAllOf().size() == 1 &&  ModelUtils.hasCommonAttributesDefined(p) ) {
+        // check if it's allOf (only 1 sub schema) with or without default/nullable/etc set in the top level
+        if (ModelUtils.isAllOf(p) && p.getAllOf().size() == 1) {
             if (p.getAllOf().get(0) instanceof Schema) {
                 original = p;
                 p = (Schema) p.getAllOf().get(0);
             } else {
                 LOGGER.error("Unknown type in allOf schema. Please report the issue via openapi-generator's Github issue tracker.");
             }
-
         }
 
         CodegenProperty property = CodegenModelFactory.newInstance(CodegenModelType.PROPERTY);
@@ -3997,7 +4019,7 @@ public class DefaultCodegen implements CodegenConfig {
         // restore original schema with default value, nullable, readonly etc
         if (original != null) {
             p = original;
-            // evaluate common attributes defined in the top level
+            // evaluate common attributes if defined in the top level
             if (p.getNullable() != null) {
                 property.isNullable = p.getNullable();
             } else if (p.getExtensions() != null && p.getExtensions().containsKey("x-nullable")) {
@@ -4010,6 +4032,9 @@ public class DefaultCodegen implements CodegenConfig {
 
             if (p.getWriteOnly() != null) {
                 property.isWriteOnly = p.getWriteOnly();
+            }
+            if (original.getExtensions() != null) {
+                property.getVendorExtensions().putAll(original.getExtensions());
             }
         }
 
@@ -4895,6 +4920,8 @@ public class DefaultCodegen implements CodegenConfig {
         // set the parameter example value
         // should be overridden by lang codegen
         setParameterExampleValue(codegenParameter, parameter);
+        // set the parameter examples (if available)
+        setParameterExamples(codegenParameter, parameter);
 
         postProcessParameter(codegenParameter);
         LOGGER.debug("debugging codegenParameter return: {}", codegenParameter);
@@ -5162,6 +5189,7 @@ public class DefaultCodegen implements CodegenConfig {
         // enum
         updateCodegenPropertyEnum(codegenProperty);
         codegenParameter.isEnum = codegenProperty.isEnum;
+        codegenParameter.isEnumRef = codegenProperty.isEnumRef;
         codegenParameter._enum = codegenProperty._enum;
         codegenParameter.allowableValues = codegenProperty.allowableValues;
 
@@ -5287,7 +5315,7 @@ public class DefaultCodegen implements CodegenConfig {
             final SecurityScheme securityScheme = securitySchemeMap.get(key);
             if (SecurityScheme.Type.APIKEY.equals(securityScheme.getType())) {
                 final CodegenSecurity cs = defaultCodegenSecurity(key, securityScheme);
-                cs.isBasic = cs.isOAuth = false;
+                cs.isBasic = cs.isOAuth = cs.isOpenId = false;
                 cs.isApiKey = true;
                 cs.keyParamName = securityScheme.getName();
                 cs.isKeyInHeader = securityScheme.getIn() == SecurityScheme.In.HEADER;
@@ -5296,7 +5324,7 @@ public class DefaultCodegen implements CodegenConfig {
                 codegenSecurities.add(cs);
             } else if (SecurityScheme.Type.HTTP.equals(securityScheme.getType())) {
                 final CodegenSecurity cs = defaultCodegenSecurity(key, securityScheme);
-                cs.isKeyInHeader = cs.isKeyInQuery = cs.isKeyInCookie = cs.isApiKey = cs.isOAuth = false;
+                cs.isKeyInHeader = cs.isKeyInQuery = cs.isKeyInCookie = cs.isApiKey = cs.isOAuth = cs.isOpenId = false;
                 cs.isBasic = true;
                 if ("basic".equalsIgnoreCase(securityScheme.getScheme())) {
                     cs.isBasicBasic = true;
@@ -5357,6 +5385,15 @@ public class DefaultCodegen implements CodegenConfig {
                 if (isFlowEmpty) {
                     once(LOGGER).error("Invalid flow definition defined in the security scheme: {}", flows);
                 }
+            } else if (SecurityScheme.Type.OPENIDCONNECT.equals(securityScheme.getType())) {
+                final CodegenSecurity cs = defaultCodegenSecurity(key, securityScheme);
+                cs.isKeyInHeader = cs.isKeyInQuery = cs.isKeyInCookie = cs.isApiKey = cs.isBasic = false;
+                cs.isOpenId = true;
+                cs.openIdConnectUrl = securityScheme.getOpenIdConnectUrl();
+                if (securityScheme.getFlows() != null) {
+                    setOpenIdConnectInfo(cs, securityScheme.getFlows().getAuthorizationCode());
+                }
+                codegenSecurities.add(cs);
             } else {
                 once(LOGGER).error("Unknown type `{}` found in the security definition `{}`.", securityScheme.getType(), securityScheme.getName());
             }
@@ -5368,8 +5405,9 @@ public class DefaultCodegen implements CodegenConfig {
     private CodegenSecurity defaultCodegenSecurity(String key, SecurityScheme securityScheme) {
         final CodegenSecurity cs = CodegenModelFactory.newInstance(CodegenModelType.SECURITY);
         cs.name = key;
+        cs.description = securityScheme.getDescription();
         cs.type = securityScheme.getType().toString();
-        cs.isCode = cs.isPassword = cs.isApplication = cs.isImplicit = false;
+        cs.isCode = cs.isPassword = cs.isApplication = cs.isImplicit = cs.isOpenId = false;
         cs.isHttpSignature = false;
         cs.isBasicBasic = cs.isBasicBearer = false;
         cs.scheme = securityScheme.getScheme();
@@ -5381,7 +5419,7 @@ public class DefaultCodegen implements CodegenConfig {
 
     private CodegenSecurity defaultOauthCodegenSecurity(String key, SecurityScheme securityScheme) {
         final CodegenSecurity cs = defaultCodegenSecurity(key, securityScheme);
-        cs.isKeyInHeader = cs.isKeyInQuery = cs.isKeyInCookie = cs.isApiKey = cs.isBasic = false;
+        cs.isKeyInHeader = cs.isKeyInQuery = cs.isKeyInCookie = cs.isApiKey = cs.isBasic = cs.isOpenId = false;
         cs.isOAuth = true;
         return cs;
     }
@@ -5618,6 +5656,10 @@ public class DefaultCodegen implements CodegenConfig {
      * @param modelName model name
      */
     protected void addImport(ComposedSchema composed, Schema childSchema, CodegenModel model, String modelName ) {
+        if (composed == null || childSchema == null) {
+            return;
+        }
+
         // import only if it's not allOf composition schema (without discriminator)
         if (!(composed.getAllOf() != null && childSchema.getDiscriminator() == null)) {
             addImport(model, modelName);
@@ -5715,6 +5757,7 @@ public class DefaultCodegen implements CodegenConfig {
                 for (CodegenProperty var : cm.vars) {
                     // create a map of codegen properties for lookup later
                     varsMap.put(var.baseName, var);
+                    var.isOverridden = false;
                 }
             }
         }
@@ -5737,6 +5780,10 @@ public class DefaultCodegen implements CodegenConfig {
                 } else {
                     // properties in the parent model only
                     cp = fromProperty(key, prop, mandatory.contains(key));
+                }
+
+                if (cm != null && cm.allVars == vars && cp.isOverridden == null) { // processing allVars and it's a parent property
+                    cp.isOverridden = true;
                 }
 
                 vars.add(cp);
@@ -6597,6 +6644,18 @@ public class DefaultCodegen implements CodegenConfig {
         }
     }
 
+    private void setOpenIdConnectInfo(CodegenSecurity codegenSecurity, OAuthFlow flow) {
+        if (flow.getScopes() != null && !flow.getScopes().isEmpty()) {
+            List<Map<String, Object>> scopes = new ArrayList<>();
+            for (Map.Entry<String, String> scopeEntry : flow.getScopes().entrySet()) {
+                Map<String, Object> scope = new HashMap<>();
+                scope.put("scope", scopeEntry.getKey());
+                scopes.add(scope);
+            }
+            codegenSecurity.scopes = scopes;
+        }
+    }
+
     private void addConsumesInfo(Operation operation, CodegenOperation codegenOperation) {
         RequestBody requestBody = ModelUtils.getReferencedRequestBody(this.openAPI, operation.getRequestBody());
         if (requestBody == null || requestBody.getContent() == null || requestBody.getContent().isEmpty()) {
@@ -6810,6 +6869,7 @@ public class DefaultCodegen implements CodegenConfig {
         // non-array/map
         updateCodegenPropertyEnum(codegenProperty);
         codegenParameter.isEnum = codegenProperty.isEnum;
+        codegenParameter.isEnumRef = codegenProperty.isEnumRef;
         codegenParameter._enum = codegenProperty._enum;
         codegenParameter.allowableValues = codegenProperty.allowableValues;
 
@@ -7499,9 +7559,15 @@ public class DefaultCodegen implements CodegenConfig {
     }
 
     protected void addOption(String key, String description, String defaultValue) {
+        addOption(key, description, defaultValue, null);
+    }
+
+    protected void addOption(String key, String description, String defaultValue, Map<String, String> enumValues) {
         CliOption option = new CliOption(key, description);
         if (defaultValue != null)
             option.defaultValue(defaultValue);
+        if (enumValues != null)
+            option.setEnum(enumValues);
         cliOptions.add(option);
     }
 
@@ -7756,9 +7822,7 @@ public class DefaultCodegen implements CodegenConfig {
         CodegenModel cm = new CodegenModel();
 
         cm.setDiscriminator(createDiscriminator("", cs, openAPI));
-        if (!this.getLegacyDiscriminatorBehavior()) {
-            cm.addDiscriminatorMappedModelsImports();
-        }
+
         for (Schema o : Optional.ofNullable(cs.getOneOf()).orElse(Collections.emptyList())) {
             if (o.get$ref() == null) {
                 if (cm.discriminator != null && o.get$ref() == null) {
@@ -8021,11 +8085,20 @@ public class DefaultCodegen implements CodegenConfig {
             return null;
         }
         List<CodegenProperty> xOf = new ArrayList<>();
+        Set<String> dataTypeSet = new HashSet<>(); // to keep track of dataType
         int i = 0;
         for (Schema xOfSchema : xOfCollection) {
             CodegenProperty cp = fromProperty(collectionName + "_" + i, xOfSchema, false);
             xOf.add(cp);
             i += 1;
+
+            if (dataTypeSet.contains(cp.dataType)) {
+                // add "x-duplicated-data-type" to indicate if the dataType already occurs before
+                // in other sub-schemas of allOf/anyOf/oneOf
+                cp.vendorExtensions.putIfAbsent("x-duplicated-data-type", true);
+            } else {
+                dataTypeSet.add(cp.dataType);
+            }
         }
         return xOf;
     }
