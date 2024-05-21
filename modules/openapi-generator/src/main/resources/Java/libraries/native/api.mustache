@@ -367,7 +367,10 @@ public class {{classname}} {
       }
             {{/isArray}}
             {{^isArray}}
-      localVarQueryStringJoiner.add({{paramName}}.toUrlQueryString("{{baseName}}"));
+      String queryString = {{paramName}}.toUrlQueryString("{{baseName}}");
+      if (!queryString.isBlank()) {
+        localVarQueryStringJoiner.add(queryString);
+      }
             {{/isArray}}
     }
         {{/isDeepObject}}
