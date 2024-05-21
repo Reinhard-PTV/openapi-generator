@@ -17,10 +17,10 @@
         <plugins>
             <!-- activate the plugin -->
             <plugin>
-                <groupId>org.openapitools</groupId>
+                <groupId>com.github.ptv-logistics</groupId>
                 <artifactId>openapi-generator-maven-plugin</artifactId>
                 <!-- RELEASE_VERSION -->
-                <version>7.2.0</version>
+                <version>7.2.0.1</version>
                 <!-- /RELEASE_VERSION -->
                 <executions>
                     <execution>

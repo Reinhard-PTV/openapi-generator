@@ -231,7 +231,7 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.openapitools</groupId>
+      <groupId>com.github.ptv-logistics</groupId>
       <artifactId>openapi-generator</artifactId>
       <version>7.2.0-SNAPSHOT</version>
     </dependency>

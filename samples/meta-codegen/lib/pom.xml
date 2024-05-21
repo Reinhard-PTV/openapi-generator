@@ -108,7 +108,7 @@
     </build>
     <dependencies>
         <dependency>
-            <groupId>org.openapitools</groupId>
+            <groupId>com.github.ptv-logistics</groupId>
             <artifactId>openapi-generator</artifactId>
             <version>${openapi-generator-version}</version>
             <scope>provided</scope>

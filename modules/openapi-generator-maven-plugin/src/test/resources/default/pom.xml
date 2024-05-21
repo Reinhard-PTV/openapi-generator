@@ -26,7 +26,7 @@
         <finalName>common-maven</finalName>
         <plugins>
             <plugin>
-                <groupId>org.openapitools</groupId>
+                <groupId>com.github.ptv-logistics</groupId>
                 <artifactId>openapi-generator-maven-plugin</artifactId>
                 <configuration>
                     <inputSpec>${basedir}/petstore.yaml</inputSpec>
