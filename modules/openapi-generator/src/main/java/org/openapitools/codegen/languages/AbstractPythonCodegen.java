@@ -161,11 +161,15 @@ public abstract class AbstractPythonCodegen extends DefaultCodegen implements Co
                 return p.getDefault().toString();
             }
         } else if (ModelUtils.isStringSchema(p)) {
-            if (p.getDefault() != null) {
-                if (Pattern.compile("\r\n|\r|\n").matcher((String) p.getDefault()).find())
-                    return "'''" + p.getDefault() + "'''";
-                else
-                    return "'" + ((String) p.getDefault()).replace("'", "\'") + "'";
+            String defaultValue = (String)p.getDefault();
+            if (defaultValue != null) {
+                defaultValue = defaultValue.replace("\\", "\\\\")
+                    .replace("'", "\'");
+                if (Pattern.compile("\r\n|\r|\n").matcher(defaultValue).find()) {
+                    return "'''" + defaultValue + "'''";
+                } else {
+                    return "'" + defaultValue + "'";
+                }
             }
         } else if (ModelUtils.isArraySchema(p)) {
             if (p.getDefault() != null) {
@@ -181,6 +185,11 @@ public abstract class AbstractPythonCodegen extends DefaultCodegen implements Co
 
     @Override
     public String toVarName(String name) {
+        // obtain the name from nameMapping directly if provided
+        if (nameMapping.containsKey(name)) {
+            return nameMapping.get(name);
+        }
+
         // sanitize name
         name = sanitizeName(name); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
 
@@ -214,6 +223,11 @@ public abstract class AbstractPythonCodegen extends DefaultCodegen implements Co
 
     @Override
     public String toParamName(String name) {
+        // obtain the name from nameMapping directly if provided
+        if (nameMapping.containsKey(name)) {
+            return nameMapping.get(name);
+        }
+
         // to avoid conflicts with 'callback' parameter for async call
         if ("callback".equals(name)) {
             return "param_callback";
